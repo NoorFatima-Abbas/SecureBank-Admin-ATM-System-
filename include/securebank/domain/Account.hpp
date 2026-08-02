@@ -16,16 +16,7 @@ namespace securebank::domain {
 
 class Account {
 public:
-    /**
-     * @brief Constructs a new active account.
-     * @param accountNumber Unique numeric identifier.
-     * @param customerName  Full name of the account holder.
-     * @param cnic          National ID number.
-     * @param phone         Contact phone number.
-     * @param type          Savings or Current.
-     * @param hashedPin     Pre-hashed 4-digit PIN (never stored in plaintext).
-     * @param openingBalance Initial deposit amount (must be >= 0).
-     */
+    /// Constructs a new active account (used when creating a fresh customer record).
     Account(long accountNumber,
             std::string customerName,
             std::string cnic,
@@ -34,7 +25,22 @@ public:
             std::string hashedPin,
             double openingBalance);
 
-    // Read-only accessors 
+    /// Reconstructs an account from persisted storage with full historical state.
+    /// @details Used exclusively by AccountLedgerStore when loading accounts.txt.
+    Account(long accountNumber,
+            std::string customerName,
+            std::string cnic,
+            std::string phone,
+            AccountType type,
+            AccountStatus status,
+            std::string hashedPin,
+            double balance,
+            int failedPinAttempts,
+            double dailyWithdrawn,
+            double dailyLimit,
+            std::string lastWithdrawalDate);
+
+    // --- Read-only accessors ---
     [[nodiscard]] long accountNumber() const noexcept;
     [[nodiscard]] std::string_view customerName() const noexcept;
     [[nodiscard]] std::string_view cnic() const noexcept;
@@ -48,37 +54,20 @@ public:
     [[nodiscard]] std::string_view hashedPin() const noexcept;
     [[nodiscard]] std::string_view lastWithdrawalDate() const noexcept;
 
-    //Controlled mutators 
-
-    /// Adds funds to the account. Throws std::invalid_argument if amount <= 0.
+    // --- Controlled mutators ---
     void credit(double amount);
-
-    /// Attempts to remove funds. Returns false (no state change) if insufficient balance.
     [[nodiscard]] bool debit(double amount);
-
-    /// Records a wrong-PIN attempt (used by AuthGuard).
     void registerFailedPinAttempt() noexcept;
-
-    /// Clears the failed-attempt counter (called after a successful login).
     void resetPinAttempts() noexcept;
-
-    /// Locks the account (called by AuthGuard after too many failed attempts).
     void lock() noexcept;
-
-    /// Unlocks the account. Only ever called from admin-authorized code paths.
     void unlock() noexcept;
-
-    /// Marks the account permanently closed.
     void close() noexcept;
-
-    /// Tracks cumulative same-day withdrawals against the daily limit.
     void accumulateDailyWithdrawal(double amount);
-
-    /// Resets the daily withdrawal counter if the stored date differs from today.
     void resetDailyWithdrawalIfNewDay(std::string_view todayDate);
-
-    /// Compares a hashed PIN attempt against the stored hash.
     [[nodiscard]] bool verifyPin(std::string_view hashedAttempt) const noexcept;
+
+    /// Serializes this account into the pipe-delimited accounts.txt line format.
+    [[nodiscard]] std::string toRecordLine() const;
 
 private:
     long accountNumber_;
